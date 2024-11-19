@@ -1,0 +1,278 @@
+<!-- <!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+    
+    .circle {
+      position: fixed;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      filter: blur(5px);
+      box-shadow: 0 0 20px currentColor;
+    }
+    
+    #myCircle {
+      background: #00f;
+      color: #00f;
+    }
+    
+    #otherCircle {
+      background: #f00;
+      color: #f00;
+    }
+    
+    #beam {
+      position: fixed;
+      height: 2px;
+      background: linear-gradient(90deg, #00f, #f00);
+      transform-origin: left center;
+      filter: blur(2px);
+      box-shadow: 0 0 10px white;
+    }
+  </style>
+</head>
+<body>
+  <div id="myCircle" class="circle"></div>
+  <div id="otherCircle" class="circle"></div>
+  <div id="beam"></div>
+
+  <script>
+    const ws = new WebSocket('ws://localhost:8080');
+    const myCircle = document.getElementById('myCircle');
+    const otherCircle = document.getElementById('otherCircle');
+    const beam = document.getElementById('beam');
+    let myId = null;
+
+    function updatePosition() {
+      const rect = myCircle.getBoundingClientRect();
+      const position = {
+        x: window.screenX + rect.left + rect.width / 2,
+        y: window.screenY + rect.top + rect.height / 2
+      };
+      
+      ws.send(JSON.stringify(position));
+    }
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (!myId) myId = data.yourId;
+
+      const positions = new Map(data.positions);
+      const myPosition = positions.get(myId);
+      
+      // Find the other client's position
+      let otherPosition = null;
+      for (const [id, pos] of positions) {
+        if (id !== myId) {
+          otherPosition = pos;
+          break;
+        }
+      }
+
+      if (otherPosition) {
+        // Calculate relative position for other circle
+        const screenOffsetX = otherPosition.x - (window.screenX + window.innerWidth / 2);
+        const screenOffsetY = otherPosition.y - (window.screenY + window.innerHeight / 2);
+        
+        otherCircle.style.left = `${window.innerWidth/2 + screenOffsetX}px`;
+        otherCircle.style.top = `${window.innerHeight/2 + screenOffsetY}px`;
+        otherCircle.style.display = 'block';
+
+        // Update beam
+        const myX = window.innerWidth/2;
+        const myY = window.innerHeight/2;
+        const otherX = window.innerWidth/2 + screenOffsetX;
+        const otherY = window.innerHeight/2 + screenOffsetY;
+        
+        const distance = Math.sqrt(Math.pow(otherX - myX, 2) + Math.pow(otherY - myY, 2));
+        const angle = Math.atan2(otherY - myY, otherX - myX) * 180 / Math.PI;
+        
+        beam.style.width = `${distance}px`;
+        beam.style.left = `${myX}px`;
+        beam.style.top = `${myY}px`;
+        beam.style.transform = `rotate(${angle}deg)`;
+        beam.style.display = 'block';
+      } else {
+        otherCircle.style.display = 'none';
+        beam.style.display = 'none';
+      }
+    };
+
+    // Position my circle in the center of the window
+    myCircle.style.left = '50%';
+    myCircle.style.top = '50%';
+
+    // Update position when window moves or on interval
+    window.addEventListener('mousemove', updatePosition);
+    setInterval(updatePosition, 100);
+  </script>
+</body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Connected Circles</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+            font-family: Arial, sans-serif;
+        }
+        
+        .circle {
+            position: fixed;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            filter: blur(5px);
+            box-shadow: 0 0 20px currentColor;
+        }
+        
+        #myCircle {
+            background: #00f;
+            color: #00f;
+        }
+        
+        #otherCircle {
+            background: #f00;
+            color: #f00;
+        }
+        
+        #beam {
+            position: fixed;
+            height: 2px;
+            background: linear-gradient(90deg, #00f, #f00);
+            transform-origin: left center;
+            filter: blur(2px);
+            box-shadow: 0 0 10px white;
+        }
+
+        #status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="myCircle" class="circle"></div>
+    <div id="otherCircle" class="circle"></div>
+    <div id="beam"></div>
+    <div id="status">Connecting...</div>
+
+    <script>
+        const WEBSOCKET_URL = 'wss://ws.im/connected-circles';
+        let ws;
+        let myId = Math.random().toString(36).substr(2, 9);
+        const myCircle = document.getElementById('myCircle');
+        const otherCircle = document.getElementById('otherCircle');
+        const beam = document.getElementById('beam');
+        const status = document.getElementById('status');
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+
+        function connectWebSocket() {
+            ws = new WebSocket(WEBSOCKET_URL);
+
+            ws.onopen = () => {
+                status.textContent = 'Connected! Open another tab to see the connection.';
+                status.style.background = 'rgba(0, 255, 0, 0.2)';
+                reconnectAttempts = 0;
+                updatePosition(); // Send initial position
+            };
+
+            ws.onclose = () => {
+                status.textContent = 'Disconnected. Reconnecting...';
+                status.style.background = 'rgba(255, 0, 0, 0.2)';
+                
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    setTimeout(connectWebSocket, 1000 * reconnectAttempts);
+                } else {
+                    status.textContent = 'Connection failed. Please refresh the page.';
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                status.textContent = 'Connection error. Retrying...';
+                status.style.background = 'rgba(255, 0, 0, 0.2)';
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.id !== myId) {
+                    const otherPosition = data.position;
+                    
+                    // Calculate relative position for other circle
+                    const screenOffsetX = otherPosition.x - (window.screenX + window.innerWidth / 2);
+                    const screenOffsetY = otherPosition.y - (window.screenY + window.innerHeight / 2);
+                    
+                    otherCircle.style.left = `${window.innerWidth/2 + screenOffsetX}px`;
+                    otherCircle.style.top = `${window.innerHeight/2 + screenOffsetY}px`;
+                    otherCircle.style.display = 'block';
+
+                    // Update beam
+                    const myX = window.innerWidth/2;
+                    const myY = window.innerHeight/2;
+                    const otherX = window.innerWidth/2 + screenOffsetX;
+                    const otherY = window.innerHeight/2 + screenOffsetY;
+                    
+                    const distance = Math.sqrt(Math.pow(otherX - myX, 2) + Math.pow(otherY - myY, 2));
+                    const angle = Math.atan2(otherY - myY, otherX - myX) * 180 / Math.PI;
+                    
+                    beam.style.width = `${distance}px`;
+                    beam.style.left = `${myX}px`;
+                    beam.style.top = `${myY}px`;
+                    beam.style.transform = `rotate(${angle}deg)`;
+                    beam.style.display = 'block';
+                }
+            };
+        }
+
+        function updatePosition() {
+            if (ws.readyState === WebSocket.OPEN) {
+                const rect = myCircle.getBoundingClientRect();
+                const position = {
+                    x: window.screenX + rect.left + rect.width / 2,
+                    y: window.screenY + rect.top + rect.height / 2
+                };
+                
+                ws.send(JSON.stringify({
+                    id: myId,
+                    position: position
+                }));
+            }
+        }
+
+        // Position my circle in the center of the window
+        myCircle.style.left = '50%';
+        myCircle.style.top = '50%';
+
+        // Initial connection
+        connectWebSocket();
+
+        // Update position when window moves or on interval
+        window.addEventListener('mousemove', updatePosition);
+        setInterval(updatePosition, 100);
+    </script>
+</body>
+</html>
